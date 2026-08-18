@@ -242,7 +242,7 @@ SCENES.forEach(function(s, i){
 
   var bg = document.createElement("div");
   bg.className = "bg";
-  bg.dataset.img = s.img;
+  bg.style.backgroundImage = "url(" + s.img + ")";
   el.appendChild(bg);
 
   var shade = document.createElement("div");
@@ -276,16 +276,11 @@ SCENES.forEach(function(s, i){
 var scenes = stage.querySelectorAll(".scene");
 var dots = dotsBox.querySelectorAll("span");
 
-// ===== 背景图懒加载（首屏只加载封面，翻页按需加载相邻页）=====
-function loadScene(i){
-  if (i < 0 || i >= total) return;
-  var el = scenes[i];
-  var bg = el.querySelector(".bg");
-  if (!bg || bg.dataset.loaded) return;
-  bg.style.backgroundImage = "url(" + bg.dataset.img + ")";
-  bg.dataset.loaded = "1";
-}
-loadScene(0); loadScene(1);
+// ===== 图片全量预加载（已压缩至 2MB，一次全部加载，翻页秒切）=====
+SCENES.forEach(function(s){
+  var im = new Image();
+  im.src = s.img;
+});
 
 // ===== 音乐 =====
 function initAudio(){
@@ -295,6 +290,17 @@ function initAudio(){
     audio.loop = true;
     audio.preload = "auto";
   } catch(e){ audio = null; }
+}
+var musicStarted = false;
+function startMusic(){
+  if (musicStarted) return;
+  if (!MUSIC.enabled) return;
+  initAudio();
+  if (!audio) return;
+  musicStarted = true;
+  var btn = document.getElementById("musicBtn");
+  audio.play().then(function(){ btn.classList.remove("paused"); btn.classList.add("playing"); })
+    .catch(function(){ musicStarted = false; /* 播放被拦截，下次进页再试 */ });
 }
 function toggleMusic(){
   if (!MUSIC.enabled) {
@@ -329,7 +335,7 @@ function goTo(i){
     else el.className = el.className.replace(/\b(before|after)\b/g, "").trim();
   });
   current = i;
-  loadScene(i); loadScene(i - 1); loadScene(i + 1);
+  if (i >= 1) startMusic();
   dots.forEach(function(d, k){ d.className = k === i ? "on" : ""; });
   var hint = document.getElementById("hint");
   if (i === total - 1) {
@@ -344,6 +350,7 @@ function prev(){ goTo(current - 1); }
 
 // 交互：点击 / 滑动 / 键盘 / 滚轮
 var touchY = null;
+var lastTouchTime = 0;
 document.addEventListener("touchstart", function(e){ touchY = e.touches[0].clientY; }, { passive: true });
 document.addEventListener("touchend", function(e){
   if (touchY === null) return;
@@ -352,12 +359,14 @@ document.addEventListener("touchend", function(e){
   if (Math.abs(dy) < 40) {
     // 轻点：往下走（排除按钮/开场）
     if (e.target.closest && e.target.closest("#musicBtn")) return;
+    lastTouchTime = Date.now();
     next();
-  } else if (dy < 0) { next(); } else { prev(); }
+  } else if (dy < 0) { lastTouchTime = Date.now(); next(); } else { lastTouchTime = Date.now(); prev(); }
 }, { passive: true });
 
 document.addEventListener("click", function(e){
   if (e.target.closest && e.target.closest("#musicBtn")) return;
+  if (Date.now() - lastTouchTime < 600) return; // 触摸点按后避免重复触发 click 连翻两页
   next();
 });
 
@@ -379,15 +388,6 @@ var intro = document.getElementById("intro");
 function start(e){
   if (e && e.stopPropagation) e.stopPropagation();
   intro.classList.add("hide");
-  // 首次交互后自动播放音乐（利用用户手势）
-  if (MUSIC.enabled) {
-    initAudio();
-    if (audio) {
-      var btn = document.getElementById("musicBtn");
-      audio.play().then(function(){ btn.classList.remove("paused"); btn.classList.add("playing"); })
-        .catch(function(){ /* 播放被拦截则保持静音，用户可手动点按钮 */ });
-    }
-  }
 }
 intro.addEventListener("click", start);
 intro.addEventListener("touchend", start);
