@@ -1,0 +1,444 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>给你</title>
+<style>
+  :root {
+    --ink: #4a3b45;
+    --ink-soft: rgba(74, 59, 69, 0.82);
+    --accent: #e8a7c2;
+    --accent-deep: #d47ba0;
+    --cream: #fdf7f2;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+    background: #0f0c0e;
+    color: var(--ink);
+    position: fixed;
+    inset: 0;
+    width: 100%;
+  }
+
+  /* 舞台 */
+  #stage { position: absolute; inset: 0; }
+
+  .scene {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    overflow: hidden;
+    opacity: 0; visibility: hidden;
+    transition: opacity .9s cubic-bezier(.4,0,.2,1), transform .9s cubic-bezier(.4,0,.2,1);
+    will-change: transform, opacity;
+  }
+  .scene.active { opacity: 1; visibility: visible; transform: none; }
+  .scene.before { transform: translateY(-6%); }
+  .scene.after  { transform: translateY(6%); }
+
+  /* 背景插画 */
+  .scene .bg {
+    position: absolute; inset: 0;
+    background-size: cover; background-position: center;
+  }
+  .scene .shade {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg,
+      rgba(14,7,12,0.66) 0%,
+      rgba(14,7,12,0.24) 15%,
+      rgba(0,0,0,0) 33%,
+      rgba(0,0,0,0) 58%,
+      rgba(16,9,14,0.42) 80%,
+      rgba(14,7,12,0.80) 100%);
+    pointer-events: none;
+  }
+
+  /* 文案区（默认放顶部，避开底部插画主体）*/
+  .text {
+    position: absolute; left: 0; right: 0;
+    top: calc(env(safe-area-inset-top, 0px) + 9vh);
+    padding: 0 8vw;
+    text-align: center;
+    color: #fff;
+    z-index: 3;
+    pointer-events: none;
+  }
+  .text .line {
+    display: block;
+    font-size: clamp(17px, 4.6vw, 22px);
+    line-height: 1.85;
+    letter-spacing: .04em;
+    font-weight: 400;
+    text-shadow:
+      -1px -1px 0 rgba(0,0,0,.42),
+       1px -1px 0 rgba(0,0,0,.42),
+      -1px  1px 0 rgba(0,0,0,.42),
+       1px  1px 0 rgba(0,0,0,.42),
+      0 2px 14px rgba(16,8,14,.82),
+      0 4px 26px rgba(10,5,9,.65);
+    opacity: 0; transform: translateY(14px);
+    transition: opacity .8s ease, transform .8s ease;
+  }
+  .scene.active .text .line { opacity: 1; transform: none; }
+  .text .line:nth-child(1) { transition-delay: .15s; }
+  .text .line:nth-child(2) { transition-delay: .28s; }
+  .text .line:nth-child(3) { transition-delay: .41s; }
+  .text .line:nth-child(4) { transition-delay: .54s; }
+  .text .line:nth-child(5) { transition-delay: .67s; }
+  .text .line:nth-child(6) { transition-delay: .80s; }
+  .text .line.em {
+    font-size: clamp(22px, 6vw, 28px);
+    font-weight: 600;
+    letter-spacing: .08em;
+  }
+
+  /* 封面（文字放底部，花茎旁）*/
+  .scene.cover .text { top: auto; bottom: 14vh; }
+  .scene.cover .title {
+    display: block;
+    font-size: clamp(34px, 11vw, 52px);
+    font-weight: 700;
+    letter-spacing: .3em;
+    text-indent: .3em;
+    margin-bottom: 1.4vh;
+    color: #fff;
+    text-shadow: 0 2px 24px rgba(20,8,16,.6);
+    opacity: 0; transform: translateY(20px);
+    transition: opacity 1s ease .2s, transform 1s ease .2s;
+  }
+  .scene.cover.active .title { opacity: 1; transform: none; }
+
+  /* 结尾（文字放底部）*/
+  .scene.ending .text { top: auto; bottom: 12vh; }
+
+  /* 满幅漫画页（如四格图）：毛玻璃卡片文字，居中避开人物头部 */
+  .scene.glass .text {
+    top: 50%;
+    transform: translateY(-50%);
+    bottom: auto;
+    padding: 13px 16px;
+    left: 8vw; right: 8vw;
+    background: rgba(24,13,20,0.58);
+    border-radius: 14px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 6px 24px rgba(10,5,9,.32);
+  }
+  .scene.glass .text .line { font-size: clamp(15px, 4vw, 19px); line-height: 1.6; }
+  .scene.ending .line { font-size: clamp(18px, 5vw, 24px); }
+
+  /* 进度指示（小郁金香） */
+  #dots {
+    position: absolute; right: 14px; top: 50%;
+    transform: translateY(-50%);
+    display: flex; flex-direction: column; gap: 8px;
+    z-index: 5;
+  }
+  #dots span {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: rgba(255,255,255,.32);
+    transition: all .4s ease;
+  }
+  #dots span.on {
+    background: #fff;
+    height: 22px; border-radius: 4px;
+    box-shadow: 0 0 8px rgba(255,255,255,.6);
+  }
+
+  /* 音乐开关 */
+  #musicBtn {
+    position: absolute; top: calc(env(safe-area-inset-top, 0px) + 14px); right: 14px;
+    width: 42px; height: 42px; border-radius: 50%;
+    background: rgba(0,0,0,.28);
+    border: 1px solid rgba(255,255,255,.28);
+    color: #fff; font-size: 19px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; z-index: 6;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+  #musicBtn.paused { opacity: .85; }
+  #musicBtn .icon { display: inline-block; }
+  #musicBtn.playing .icon { animation: spin 3s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* 翻页提示 */
+  #hint {
+    position: absolute; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 2.2vh);
+    transform: translateX(-50%);
+    color: rgba(255,255,255,.75); font-size: 12px; letter-spacing: .12em;
+    z-index: 4; text-align: center;
+    animation: bob 2.2s ease-in-out infinite;
+  }
+  @keyframes bob { 0%,100%{ transform: translate(-50%,0); } 50%{ transform: translate(-50%,6px); } }
+
+  /* 花瓣粒子 */
+  #petals { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+
+  /* 开场遮罩 */
+  #intro {
+    position: absolute; inset: 0; z-index: 10;
+    background: radial-gradient(circle at 50% 42%, #2a1f26, #140d12);
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 12px;
+    transition: opacity .8s ease; color: #fff;
+  }
+  #intro.hide { opacity: 0; pointer-events: none; }
+  #intro .tap {
+    font-size: clamp(16px, 4.4vw, 20px); letter-spacing: .24em; text-indent: .24em;
+    color: rgba(255,255,255,.92);
+  }
+  #intro .sub { font-size: 12px; letter-spacing: .2em; color: rgba(255,255,255,.55); }
+</style>
+</head>
+<body>
+  <div id="stage"></div>
+  <div id="petals"></div>
+  <div id="dots"></div>
+  <button id="musicBtn" class="paused" aria-label="音乐开关"><span class="icon">♪</span></button>
+  <div id="hint">向上轻滑 · 继续</div>
+
+  <div id="intro">
+    <div class="tap">轻 触 开 启</div>
+    <div class="sub">七夕 · 二〇二六</div>
+  </div>
+
+<script>
+// ===== 文案数据（最终定稿，2026-08-18）=====
+var SCENES = [
+  { n: 1, cover: true,  img: "images/1.webp",  title: "给你", lines: ["七夕 · 二〇二六"] },
+  { n: 2, img: "images/2.webp",  lines: ["以前，我总是一个人。", "不知何为理解", "不知何为付出", "不知何为责任", "更不知如何表达自己"] },
+  { n: 3, img: "images/3.webp",  lines: ["后来，我遇见了你。"] },
+  { n: 4, img: "images/4.webp",  lines: ["你那么开朗、那么热情，", "我明明感受到了你的好，", "却不知道怎么回应。", "我害怕，我躲开了。"] },
+  { n: 5, img: "images/5.webp",  lines: ["直到快失去你的那一刻，", "我才发现——"] },
+  { n: 6, img: "images/6.webp",  lines: ["我非常非常喜欢你。"], em: true },
+  { n: 7, img: "images/7.webp",  lines: ["我知道，你走到今天，很不容易。", "你的过往你的一切，", "我都想接受。"] },
+  { n: 8, img: "images/8.webp",  lines: ["你说过的话，我一句一句都记着。"] },
+  { n: 9, img: "images/9.webp", glass: true, lines: ["所以我在认真生活：", "锻炼、护肤、学习、找副业，", "与父母老师好好相处，", "成为负责人感受担当，", "一点一点，把自己变好。"] },
+  { n: 10, img: "images/10.webp", lines: ["不想让你操心，", "想让你放心，", "我是真的喜欢你。"] },
+  { n: 11, img: "images/11.webp", lines: ["我怕看不懂你想要什么，", "我怕误会你的意思，", "我怕变成你的负担，", "我怕我配不上你，", "更怕永远失去了你。"] },
+  { n: 12, img: "images/12.webp", lines: ["你的考试，一定准备得很辛苦。", "我相信，你一定可以。"] },
+  { n: 13, img: "images/13.webp", lines: ["起那么早，别熬到那么晚。", "别贪嘴吃得太多，", "身体比什么都重要。", "你辛苦了。"] },
+  { n: 14, img: "images/14.webp", lines: ["我不会走，", "我想留在你的内心，", "给你真诚的关爱，", "替你分担生活琐事，", "一直牵挂着你。"] },
+  { n: 15, img: "images/15.webp", ending: true, lines: ["我喜欢的是你，", "不是任何人。", "不管什么时候，我都在。"], em: true }
+];
+
+// ===== 音乐（bgm.mp3 已就位，轻触开启后自动播放）=====
+var MUSIC = { enabled: true, file: "music/bgm.mp3" };
+
+var stage = document.getElementById("stage");
+var dotsBox = document.getElementById("dots");
+var current = 0;
+var total = SCENES.length;
+var audio = null;
+
+// 构建场景
+SCENES.forEach(function(s, i){
+  var el = document.createElement("section");
+  el.className = "scene" + (i === 0 ? " active" : "") + (s.cover ? " cover" : "") + (s.ending ? " ending" : "") + (s.glass ? " glass" : "");
+  el.dataset.i = i;
+
+  var bg = document.createElement("div");
+  bg.className = "bg";
+  bg.dataset.img = s.img;
+  el.appendChild(bg);
+
+  var shade = document.createElement("div");
+  shade.className = "shade";
+  el.appendChild(shade);
+
+  var text = document.createElement("div");
+  text.className = "text";
+  if (s.cover && s.title) {
+    var tt = document.createElement("span");
+    tt.className = "title";
+    tt.textContent = s.title;
+    text.appendChild(tt);
+  }
+  s.lines.forEach(function(line){
+    var sp = document.createElement("span");
+    sp.className = "line" + (s.em ? " em" : "");
+    sp.textContent = line;
+    text.appendChild(sp);
+  });
+  el.appendChild(text);
+
+  stage.appendChild(el);
+
+  // 进度点
+  var d = document.createElement("span");
+  if (i === 0) d.className = "on";
+  dotsBox.appendChild(d);
+});
+
+var scenes = stage.querySelectorAll(".scene");
+var dots = dotsBox.querySelectorAll("span");
+
+// ===== 背景图懒加载（首屏只加载封面，翻页按需加载相邻页）=====
+function loadScene(i){
+  if (i < 0 || i >= total) return;
+  var el = scenes[i];
+  var bg = el.querySelector(".bg");
+  if (!bg || bg.dataset.loaded) return;
+  bg.style.backgroundImage = "url(" + bg.dataset.img + ")";
+  bg.dataset.loaded = "1";
+}
+loadScene(0); loadScene(1);
+
+// ===== 音乐 =====
+function initAudio(){
+  if (audio) return;
+  try {
+    audio = new Audio(MUSIC.file);
+    audio.loop = true;
+    audio.preload = "auto";
+  } catch(e){ audio = null; }
+}
+function toggleMusic(){
+  if (!MUSIC.enabled) {
+    // 还没放音频文件：轻提示
+    return;
+  }
+  initAudio();
+  if (!audio) return;
+  var btn = document.getElementById("musicBtn");
+  if (audio.paused) {
+    audio.play().then(function(){ btn.classList.remove("paused"); btn.classList.add("playing"); })
+      .catch(function(){ /* 自动播放被拦截 */ });
+  } else {
+    audio.pause();
+    btn.classList.add("paused"); btn.classList.remove("playing");
+  }
+}
+document.getElementById("musicBtn").addEventListener("click", function(e){
+  e.stopPropagation();
+  toggleMusic();
+});
+if (MUSIC.enabled) { document.getElementById("musicBtn").style.display = "flex"; }
+else { document.getElementById("musicBtn").style.display = "none"; }
+
+// ===== 翻页 =====
+function goTo(i){
+  if (i < 0 || i >= total || i === current) return;
+  scenes.forEach(function(el){
+    var idx = +el.dataset.i;
+    if (idx === i) el.className = el.className.replace(/\b(before|after|active)\b/g, " ").trim() + " active";
+    else if (idx === current) el.className = el.className.replace("active","").trim() + (idx < i ? " before" : " after");
+    else el.className = el.className.replace(/\b(before|after)\b/g, "").trim();
+  });
+  current = i;
+  loadScene(i); loadScene(i - 1); loadScene(i + 1);
+  dots.forEach(function(d, k){ d.className = k === i ? "on" : ""; });
+  var hint = document.getElementById("hint");
+  if (i === total - 1) {
+    hint.textContent = "送给你 · 七夕快乐";
+  } else {
+    hint.textContent = "向上轻滑 · 继续";
+  }
+}
+
+function next(){ goTo(current + 1); }
+function prev(){ goTo(current - 1); }
+
+// 交互：点击 / 滑动 / 键盘 / 滚轮
+var touchY = null;
+document.addEventListener("touchstart", function(e){ touchY = e.touches[0].clientY; }, { passive: true });
+document.addEventListener("touchend", function(e){
+  if (touchY === null) return;
+  var dy = e.changedTouches[0].clientY - touchY;
+  touchY = null;
+  if (Math.abs(dy) < 40) {
+    // 轻点：往下走（排除按钮/开场）
+    if (e.target.closest && e.target.closest("#musicBtn")) return;
+    next();
+  } else if (dy < 0) { next(); } else { prev(); }
+}, { passive: true });
+
+document.addEventListener("click", function(e){
+  if (e.target.closest && e.target.closest("#musicBtn")) return;
+  next();
+});
+
+document.addEventListener("keydown", function(e){
+  if (e.key === "ArrowDown" || e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") { e.preventDefault(); next(); }
+  else if (e.key === "ArrowUp" || e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); prev(); }
+});
+
+var wheelLock = false;
+document.addEventListener("wheel", function(e){
+  if (wheelLock) return;
+  wheelLock = true;
+  setTimeout(function(){ wheelLock = false; }, 700);
+  if (e.deltaY > 0) next(); else prev();
+}, { passive: true });
+
+// ===== 开场 =====
+var intro = document.getElementById("intro");
+function start(e){
+  if (e && e.stopPropagation) e.stopPropagation();
+  intro.classList.add("hide");
+  // 首次交互后自动播放音乐（利用用户手势）
+  if (MUSIC.enabled) {
+    initAudio();
+    if (audio) {
+      var btn = document.getElementById("musicBtn");
+      audio.play().then(function(){ btn.classList.remove("paused"); btn.classList.add("playing"); })
+        .catch(function(){ /* 播放被拦截则保持静音，用户可手动点按钮 */ });
+    }
+  }
+}
+intro.addEventListener("click", start);
+intro.addEventListener("touchend", start);
+
+// ===== 花瓣粒子（轻量，开场后启动）=====
+var petalsCanvas = document.getElementById("petals");
+var petalsStarted = false;
+function startPetals(){
+  if (petalsStarted) return;
+  petalsStarted = true;
+  var canvas = document.createElement("canvas");
+  canvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;";
+  petalsCanvas.appendChild(canvas);
+  var ctx = canvas.getContext("2d");
+  var W, H, petals = [];
+  function resize(){ W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
+  resize();
+  window.addEventListener("resize", resize);
+  var P_COUNT = 18;
+  for (var i = 0; i < P_COUNT; i++){
+    petals.push({
+      x: Math.random() * W, y: Math.random() * H,
+      r: 4 + Math.random() * 7,
+      s: 0.35 + Math.random() * 0.8,
+      o: 0.25 + Math.random() * 0.5,
+      a: Math.random() * Math.PI * 2,
+      drift: 0.4 + Math.random() * 0.9
+    });
+  }
+  function frame(){
+    ctx.clearRect(0, 0, W, H);
+    petals.forEach(function(p){
+      p.y += p.s;
+      p.x += Math.sin(p.a += 0.01) * p.drift;
+      if (p.y > H + 20) { p.y = -20; p.x = Math.random() * W; }
+      if (p.x > W + 20) p.x = -20;
+      if (p.x < -20) p.x = W + 20;
+      ctx.save();
+      ctx.globalAlpha = p.o;
+      ctx.fillStyle = "#f7c9d9";
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y, p.r, p.r * 0.55, p.a, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    });
+    requestAnimationFrame(frame);
+  }
+  frame();
+}
+document.addEventListener("click", startPetals, { once: true });
+document.addEventListener("touchend", startPetals, { once: true });
+</script>
+</body>
+</html>
